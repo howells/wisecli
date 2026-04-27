@@ -6,8 +6,9 @@
  * Wise profiles (BUSINESS / PERSONAL); use --profile-type to pick.
  */
 
-import { error, success } from "@howells/cli";
-import { flag, getLimit, readResult } from "@howells/cli/args";
+import { filterFields, success } from "@howells/cli";
+import { flag, getFields, getLimit, readResult } from "@howells/cli/args";
+// Wise transfers paginate via offset; surface as --offset.
 import {
   allAccounts,
   listConfiguredAccounts,
@@ -19,6 +20,7 @@ import {
   type TransfersOptions,
   transfers,
 } from "./commands.ts";
+import { fail, failFromUnknown } from "./errors.ts";
 import { listProfiles } from "./profiles.ts";
 import {
   validateAccountName,
@@ -34,7 +36,7 @@ function getToken(cmd: string): { name: string; token: string } {
   try {
     return resolveAccount(acctName);
   } catch (err) {
-    error(err instanceof Error ? err.message : String(err), cmd);
+    failFromUnknown(err, cmd);
   }
 }
 
@@ -56,7 +58,7 @@ switch (command) {
           const profiles = await listProfiles(token);
           success({ token: name, profiles }, "accounts", { account: name });
         } catch (err) {
-          error(err instanceof Error ? err.message : String(err), "accounts");
+          failFromUnknown(err, "accounts");
         }
       })();
     } else {
@@ -82,7 +84,7 @@ switch (command) {
           { account: name },
         );
       } catch (err) {
-        error(err instanceof Error ? err.message : String(err), "profiles");
+        failFromUnknown(err, "profiles");
       }
     })();
     break;
@@ -97,16 +99,18 @@ switch (command) {
       (async () => {
         try {
           const tokens = allAccounts();
-          const rows = [];
+          const rows: Array<Record<string, unknown>> = [];
           for (const t of tokens) {
             const part = await balanceForAllProfiles(t.token);
             for (const r of part) {
               rows.push({ ...r, account: t.name });
             }
           }
-          success(rows, "balance", { account: "all" });
+          success(filterFields(rows, getFields("balance")), "balance", {
+            account: "all",
+          });
         } catch (err) {
-          error(err instanceof Error ? err.message : String(err), "balance");
+          failFromUnknown(err, "balance", "all");
         }
       })();
       break;
@@ -118,9 +122,16 @@ switch (command) {
         const data = profileType
           ? await balanceForProfile(token, profileType)
           : await balanceForAllProfiles(token);
-        success(data, "balance", { account: name });
+        success(
+          filterFields(
+            data as unknown as Record<string, unknown>[],
+            getFields("balance"),
+          ),
+          "balance",
+          { account: name },
+        );
       } catch (err) {
-        error(err instanceof Error ? err.message : String(err), "balance");
+        failFromUnknown(err, "balance", name);
       }
     })();
     break;
@@ -133,24 +144,48 @@ switch (command) {
     const from = flag("from");
     const to = flag("to");
     const status = flag("status");
+    const offsetRaw = flag("offset");
     if (from) validateDate(from, "from", "transfers");
     if (to) validateDate(to, "to", "transfers");
+    let offset: number | undefined;
+    if (offsetRaw !== undefined) {
+      const parsed = Number(offsetRaw);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        fail(
+          `Invalid offset: "${offsetRaw}". Must be a non-negative integer.`,
+          "ERR_VALIDATION",
+          "transfers",
+        );
+      }
+      offset = parsed;
+    }
 
     const options: TransfersOptions = {
       from: from || undefined,
       to: to || undefined,
       limit: getLimit("transfers") ?? undefined,
       status: status || undefined,
+      offset,
     };
 
     (async () => {
       try {
-        const data = await transfers(token, profileType, options);
-        readResult("transfers", data as unknown as Record<string, unknown>[], {
-          account: name,
-        });
+        const page = await transfers(token, profileType, options);
+        // readResult applies --fields filtering on row arrays. Filter rows,
+        // then surface pagination metadata at the envelope level via `extra`.
+        readResult(
+          "transfers",
+          page.transfers as unknown as Record<string, unknown>[],
+          {
+            account: name,
+            has_more: page.has_more,
+            next_offset: page.next_offset,
+            offset: page.offset,
+            limit: page.limit,
+          },
+        );
       } catch (err) {
-        error(err instanceof Error ? err.message : String(err), "transfers");
+        failFromUnknown(err, "transfers", name);
       }
     })();
     break;
@@ -161,28 +196,61 @@ switch (command) {
       {
         cli: "wisecli",
         version: "0.1.0",
-        description: "Agent-first CLI for Wise",
+        description: "Agent-first read-only CLI for Wise (TransferWise).",
+        readOnly: true,
+        mcp_server: {
+          bin: "wisecli-mcp",
+          note: "Same operations exposed as MCP tools over stdio. Set WISE_<NAME>_TOKEN env vars on the host process and wire the bin in your MCP host config.",
+        },
+        auth: {
+          mechanism: "Bearer token",
+          source:
+            "Env vars matching WISE_<NAME>_TOKEN. WISE_API_TOKEN or WISE_TOKEN map to --account default. Other names are derived (WISE_BUSINESS_TOKEN → --account business). Tokens are passed straight to api.wise.com — create a read-only token at wise.com/settings/api-tokens.",
+        },
         accounts: listConfiguredAccounts(),
-        auth: "Set WISE_<NAME>_TOKEN env vars (e.g. WISE_BUSINESS_TOKEN). Or WISE_API_TOKEN for a single-account fallback. Tokens have read access via api.wise.com.",
         commands: {
           accounts: {
             description:
-              "List configured tokens, or list profiles for one token via --account <name>",
-            params: { account: { type: "string" } },
+              "List configured token accounts, or with --account <name> list the Wise profiles within that token. Use when you need to see what's available before calling balance or transfers. Do not use to list a token's profiles without --account; the bare command only shows token names.",
+            params: {
+              account: {
+                type: "string",
+                description:
+                  "Token account name (from WISE_<NAME>_TOKEN). Optional — omitting it lists configured tokens.",
+              },
+            },
           },
           profiles: {
-            description: "List profiles (business/personal) under a token",
-            params: { account: { type: "string" } },
+            description:
+              "List Wise profiles (BUSINESS/PERSONAL) under a single token. Use before balance/transfers when you need to know which profile types exist. Do not use to list token accounts (use 'accounts' for that).",
+            params: {
+              account: {
+                type: "string",
+                description:
+                  "Token account name. Defaults to the first configured.",
+              },
+            },
             fields: ["id", "type", "name"],
           },
           balance: {
             description:
-              "Balances. Default: all profiles for the first/named token. --account all aggregates across tokens.",
+              "Per-currency balances. Default: every profile under the first/named token. Use when the user asks about money, current balances, or available funds. Do not use for transfer history. --account all aggregates across every configured token.",
             params: {
-              account: { type: "string" },
+              account: {
+                type: "string",
+                description:
+                  "Token account name, or 'all' to aggregate across every configured token.",
+              },
               "profile-type": {
                 type: "string",
                 enum: ["business", "personal"],
+                description:
+                  "Required when a token has both BUSINESS and PERSONAL profiles and you want only one.",
+              },
+              fields: {
+                type: "string",
+                description:
+                  "Comma-separated field names to project. Example: 'profile,currency,formatted'.",
               },
             },
             fields: [
@@ -197,21 +265,60 @@ switch (command) {
             ],
           },
           transfers: {
-            description: "Outgoing/incoming transfers for a profile",
+            description:
+              "Outgoing/incoming transfers for one profile. Use when the user asks about transfer history, recent transactions, sent payments, or wants to filter by date or status. Do not use for current balances. Always pair with --fields to keep responses small.",
             params: {
-              account: { type: "string" },
+              account: {
+                type: "string",
+                description:
+                  "Token account name. Required when more than one token is configured.",
+              },
               "profile-type": {
                 type: "string",
                 enum: ["business", "personal"],
+                description: "Required when a token has both profiles.",
               },
-              from: { type: "string", format: "ISO 8601" },
-              to: { type: "string", format: "ISO 8601" },
-              limit: { type: "integer", description: "Default: 100" },
+              from: {
+                type: "string",
+                format: "ISO 8601",
+                description:
+                  "Only transfers created on or after this date. Example: '2026-04-01' or '2026-04-01T00:00:00Z'.",
+              },
+              to: {
+                type: "string",
+                format: "ISO 8601",
+                description: "Only transfers created on or before this date.",
+              },
+              limit: {
+                type: "integer",
+                description: "Max results. Default 100. Cap 500.",
+              },
+              offset: {
+                type: "integer",
+                description:
+                  "Skip this many results before returning. Use with next_offset from a prior page to paginate.",
+              },
               status: {
                 type: "string",
-                description: "Filter by Wise transfer status",
+                enum: [
+                  "incoming_payment_waiting",
+                  "incoming_payment_initiated",
+                  "processing",
+                  "funds_converted",
+                  "outgoing_payment_sent",
+                  "charged_back",
+                  "cancelled",
+                  "funds_refunded",
+                  "bounced_back",
+                  "unknown",
+                ],
+                description: "Filter by Wise transfer status.",
               },
-              fields: { type: "string" },
+              fields: {
+                type: "string",
+                description:
+                  "Comma-separated field names to return. Example: 'sourceFormatted,targetFormatted,date,status'.",
+              },
             },
             fields: [
               "id",
@@ -227,19 +334,56 @@ switch (command) {
               "reference",
             ],
           },
+          schema: {
+            description:
+              "Returns this manifest. Use at session start or when you need to know what fields a balance or transfer row contains.",
+            params: {},
+          },
+          help: {
+            description:
+              "Print human-friendly usage to stdout (still as JSON envelope).",
+            params: {},
+          },
         },
         flags: {
           "--account":
-            "Token name derived from WISE_<NAME>_TOKEN env vars, or 'all'",
+            "Token account name (from WISE_<NAME>_TOKEN), or 'all' on balance.",
           "--profile-type":
-            "Pick a profile within a token: 'business' or 'personal'",
-          "--from": "ISO 8601 date for transfers (createdDateStart)",
-          "--to": "ISO 8601 date for transfers (createdDateEnd)",
-          "--limit": "Max results (default 100)",
-          "--status": "Filter transfers by Wise status",
-          "--fields": "Comma-separated field names to return",
+            "Pick a profile within a token: 'business' or 'personal'.",
+          "--from": "ISO 8601 date for transfers (createdDateStart).",
+          "--to": "ISO 8601 date for transfers (createdDateEnd).",
+          "--limit": "Max results. Default 100.",
+          "--offset": "Skip N results (transfers pagination).",
+          "--status": "Filter transfers by Wise status.",
+          "--fields": "Comma-separated field names to return.",
         },
-        readOnly: true,
+        envelope: {
+          success: {
+            ok: true,
+            data: "<command output>",
+            command: "<name>",
+            account: "<name>",
+          },
+          error: {
+            ok: false,
+            error: "<message>",
+            code: "ERR_USAGE | ERR_VALIDATION | ERR_NOT_FOUND | ERR_NO_TOKEN | ERR_AUTH | ERR_RATE_LIMIT | ERR_UNAVAILABLE | ERR_NETWORK | ERR_UNKNOWN",
+            is_retriable: "boolean",
+            retry_after_seconds: "number?",
+            trace_id: "string?",
+            hint: "string?",
+            command: "<name>",
+          },
+        },
+        exit_codes: {
+          "0": "success",
+          "64": "usage error (unknown command, no command supplied)",
+          "65": "validation failure",
+          "66": "not found (account/profile/token)",
+          "69": "service unavailable (5xx, network, rate limit)",
+          "77": "permission denied (401/403)",
+          "1": "generic fallback",
+        },
       },
       "schema",
     );
@@ -279,10 +423,12 @@ switch (command) {
     break;
 
   case undefined:
-    error("No command provided. Run 'wisecli help' for usage.");
+    fail("No command provided. Run 'wisecli help' for usage.", "ERR_USAGE");
     break;
 
   default:
-    error(`Unknown command: "${command}". Run 'wisecli help' for usage.`);
-    break;
+    fail(
+      `Unknown command: "${command}". Run 'wisecli help' for usage.`,
+      "ERR_USAGE",
+    );
 }

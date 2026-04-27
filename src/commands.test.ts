@@ -159,7 +159,7 @@ describe("transfers", () => {
       );
     }) as unknown as typeof fetch;
 
-    const rows = await transfers("token", "business", {
+    const page = await transfers("token", "business", {
       from: "2026-04-01",
       limit: 10,
     });
@@ -167,12 +167,52 @@ describe("transfers", () => {
     expect(lastUrl).toContain("profile=1");
     expect(lastUrl).toContain("createdDateStart=2026-04-01");
     expect(lastUrl).toContain("limit=10");
-    expect(rows[0]).toMatchObject({
+    expect(page.transfers[0]).toMatchObject({
       id: 999,
       sourceFormatted: "£100.00",
       targetFormatted: "$125.00",
       reference: "Invoice 7",
       rate: 1.25,
     });
+    expect(page.offset).toBe(0);
+    expect(page.limit).toBe(10);
+    // Got 1 row but asked for 10 — has_more should be false.
+    expect(page.has_more).toBe(false);
+    expect(page.next_offset).toBeUndefined();
+  });
+
+  it("signals has_more and next_offset when limit is filled", async () => {
+    let lastUrl = "";
+    globalThis.fetch = (async (url: string) => {
+      lastUrl = url;
+      if (url.endsWith("/v2/profiles")) {
+        return new Response(JSON.stringify([fakeProfilesPayload[0]]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      // Return exactly `limit=2` rows.
+      const rows = [1, 2].map((i) => ({
+        id: i,
+        sourceCurrency: "GBP",
+        targetCurrency: "USD",
+        sourceValue: 10 * i,
+        targetValue: 12 * i,
+        status: "outgoing_payment_sent",
+        rate: 1.2,
+        created: "2026-04-10T08:00:00Z",
+      }));
+      return new Response(JSON.stringify(rows), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const page = await transfers("token", "business", { limit: 2, offset: 4 });
+    expect(lastUrl).toContain("limit=2");
+    expect(lastUrl).toContain("offset=4");
+    expect(page.has_more).toBe(true);
+    expect(page.next_offset).toBe(6);
+    expect(page.offset).toBe(4);
   });
 });

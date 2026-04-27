@@ -129,16 +129,34 @@ export interface TransfersOptions {
   limit?: number;
   /** Filter by Wise transfer status (e.g. `outgoing_payment_sent`). */
   status?: string;
+  /** Skip this many results before returning (for pagination). */
+  offset?: number;
 }
 
-/** List transfers for a single profile. */
+export interface TransfersPage {
+  transfers: TransferRow[];
+  /** True if the API returned exactly `limit` rows — more probably exist. */
+  has_more: boolean;
+  /** Suggested next offset for the next page. Undefined when has_more is false. */
+  next_offset?: number;
+  /** The offset that was actually requested. */
+  offset: number;
+  /** The limit that was actually applied. */
+  limit: number;
+}
+
+const DEFAULT_LIMIT = 100;
+
+/** List transfers for a single profile, with pagination metadata. */
 export async function transfers(
   token: string,
   profileType: string | undefined,
   options: TransfersOptions = {},
-): Promise<TransferRow[]> {
+): Promise<TransfersPage> {
   const profiles = await listProfiles(token);
   const profile = pickProfile(profiles, profileType);
+  const limit = options.limit ?? DEFAULT_LIMIT;
+  const offset = options.offset ?? 0;
   const raw = await api<
     { transferList?: RawWiseTransfer[] } | RawWiseTransfer[]
   >({
@@ -148,10 +166,19 @@ export async function transfers(
       profile: profile.id,
       createdDateStart: options.from,
       createdDateEnd: options.to,
-      limit: options.limit ?? 100,
+      limit,
+      offset: offset || undefined,
       status: options.status,
     },
   });
   const list = Array.isArray(raw) ? raw : (raw.transferList ?? []);
-  return list.map(toTransferRow);
+  const rows = list.map(toTransferRow);
+  const has_more = rows.length === limit;
+  return {
+    transfers: rows,
+    has_more,
+    next_offset: has_more ? offset + limit : undefined,
+    offset,
+    limit,
+  };
 }

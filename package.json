@@ -23,21 +23,27 @@
     "linux"
   ],
   "bin": {
-    "wisecli": "./dist/index.js"
+    "wisecli": "./dist/index.js",
+    "wisecli-mcp": "./dist/mcp-server.js"
   },
   "files": [
     "dist",
     "AGENTS.md",
+    "CLAUDE.md",
+    "llms.txt",
+    "llms-full.txt",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
+    "mcp": "tsx src/mcp-server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "howells-lint",
     "format": "howells-format",
+    "gen:llms": "(echo '<!-- Generated: README.md + AGENTS.md concatenated for token-bounded ingestion. Regenerate with: pnpm gen:llms -->'; echo; cat README.md; echo; echo '---'; echo; cat AGENTS.md) > llms-full.txt",
     "prepublishOnly": "pnpm build",
     "prepare": "howells-husky"
   },
@@ -59,6 +65,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@howells/cli": "^0.1.0"
+    "@howells/cli": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
   }
 }

@@ -11,6 +11,8 @@
  * which {@link ./profiles.ts} discovers from the API.
  */
 
+import { WiseCliError } from "./errors.ts";
+
 export interface AccountConfig {
   name: string;
   token: string;
@@ -33,6 +35,8 @@ function discoverAccounts(): AccountConfig[] {
     accounts.push({ name, token: value });
   }
 
+  // Sort for deterministic first-account selection across env-iteration orders.
+  accounts.sort((a, b) => a.name.localeCompare(b.name));
   return accounts;
 }
 
@@ -45,7 +49,8 @@ export function resolveAccount(name: string | undefined): AccountConfig {
     if (match) return match;
     const partial = accounts.find((a) => a.name.startsWith(key));
     if (partial) return partial;
-    throw new Error(
+    throw new WiseCliError(
+      "ERR_NOT_FOUND",
       `No account "${name}" found. Available: ${
         accounts.map((a) => a.name).join(", ") || "none"
       }. Set WISE_<NAME>_TOKEN env vars.`,
@@ -53,7 +58,8 @@ export function resolveAccount(name: string | undefined): AccountConfig {
   }
 
   if (accounts.length === 0) {
-    throw new Error(
+    throw new WiseCliError(
+      "ERR_NO_TOKEN",
       "No Wise tokens found. Set WISE_API_TOKEN or WISE_<NAME>_TOKEN env vars.",
     );
   }
@@ -64,7 +70,8 @@ export function resolveAccount(name: string | undefined): AccountConfig {
 export function allAccounts(): AccountConfig[] {
   const accounts = discoverAccounts();
   if (accounts.length === 0) {
-    throw new Error(
+    throw new WiseCliError(
+      "ERR_NO_TOKEN",
       "No Wise tokens found. Set WISE_API_TOKEN or WISE_<NAME>_TOKEN env vars.",
     );
   }

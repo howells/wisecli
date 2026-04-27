@@ -7,6 +7,7 @@
  */
 
 import { api } from "./api.ts";
+import { WiseCliError } from "./errors.ts";
 
 export interface RawWiseProfile {
   id: number;
@@ -53,7 +54,8 @@ export function pickProfile(
   type: string | undefined,
 ): WiseProfile {
   if (profiles.length === 0) {
-    throw new Error(
+    throw new WiseCliError(
+      "ERR_NOT_FOUND",
       "No Wise profiles found under this token. Check the token has API access.",
     );
   }
@@ -62,7 +64,8 @@ export function pickProfile(
     const key = type.toLowerCase();
     const match = profiles.find((p) => p.type === key);
     if (!match) {
-      throw new Error(
+      throw new WiseCliError(
+        "ERR_NOT_FOUND",
         `No "${type}" profile under this token. Available: ${profiles
           .map((p) => p.type)
           .join(", ")}.`,
@@ -75,7 +78,8 @@ export function pickProfile(
     return profiles[0] as WiseProfile;
   }
 
-  throw new Error(
+  throw new WiseCliError(
+    "ERR_VALIDATION",
     `This token has multiple profiles (${profiles
       .map((p) => p.type)
       .join(", ")}). Pass --profile-type business|personal.`,

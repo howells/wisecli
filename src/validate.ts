@@ -1,4 +1,4 @@
-import { error, hardenId } from "@howells/cli";
+import { fail } from "./errors.ts";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/;
 
@@ -19,30 +19,69 @@ export function validateDate(
   command: string,
 ): void {
   if (hasControlChars(value)) {
-    error(`Invalid ${field}: contains control characters.`, command);
+    fail(
+      `Invalid ${field}: contains control characters.`,
+      "ERR_VALIDATION",
+      command,
+    );
   }
   if (value.includes("..") || value.includes("/")) {
-    error(`Invalid ${field}: contains path traversal characters.`, command);
+    fail(
+      `Invalid ${field}: contains path traversal characters.`,
+      "ERR_VALIDATION",
+      command,
+    );
   }
   if (!ISO_DATE_PATTERN.test(value)) {
-    error(
+    fail(
       `Invalid ${field}: "${value}". Must be ISO 8601 (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ).`,
+      "ERR_VALIDATION",
       command,
     );
   }
 }
 
-/** Validate an account name supplied via --account. */
+/** Validate an account name. Rejects control chars, path traversal, encoded chars, overly long names. */
 export function validateAccountName(value: string, command: string): void {
-  hardenId(value, command, { maxLength: 64, label: "account name" });
+  const label = "account name";
+  const maxLength = 64;
+  if (hasControlChars(value)) {
+    fail(
+      `Invalid ${label}: contains control characters.`,
+      "ERR_VALIDATION",
+      command,
+    );
+  }
+  if (value.includes("..") || value.includes("/") || value.includes("\\")) {
+    fail(
+      `Invalid ${label}: contains path traversal characters.`,
+      "ERR_VALIDATION",
+      command,
+    );
+  }
+  if (value.includes("%") || value.includes("?") || value.includes("#")) {
+    fail(
+      `Invalid ${label}: contains encoded or query characters.`,
+      "ERR_VALIDATION",
+      command,
+    );
+  }
+  if (value.length > maxLength) {
+    fail(
+      `Invalid ${label}: too long (max ${maxLength} characters).`,
+      "ERR_VALIDATION",
+      command,
+    );
+  }
 }
 
 /** Validate a profile type — must be exactly "business" or "personal". */
 export function validateProfileType(value: string, command: string): void {
   const key = value.toLowerCase();
   if (key !== "business" && key !== "personal") {
-    error(
+    fail(
       `Invalid profile-type: "${value}". Must be "business" or "personal".`,
+      "ERR_VALIDATION",
       command,
     );
   }
