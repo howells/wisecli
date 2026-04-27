@@ -1,0 +1,26 @@
+# @howells/wisecli
+
+> Agent-first CLI for Wise (TransferWise). Read-only access to balances, transfers, and profiles. Multi-token via env vars. All output is JSON with a `{ok, data, error, command, account}` envelope.
+
+## Capabilities
+
+- `wisecli accounts` — List configured tokens; with `--account <name>` lists profiles for that token.
+- `wisecli profiles --account <name>` — List Wise profiles (business/personal) under a token.
+- `wisecli balance` — Per-currency balances. Supports `--account all` to aggregate across tokens.
+- `wisecli transfers` — Outgoing/incoming transfers. Filter by `--from`, `--to`, `--status`, `--limit`. Use `--fields` for projection.
+- `wisecli schema` — Machine-readable command/param manifest.
+
+## Discovery
+
+- [README.md](./README.md) — install, setup, usage examples.
+- [AGENTS.md](./AGENTS.md) — invariants, token discovery, profile vs token, common workflows.
+- [llms-full.txt](./llms-full.txt) — concatenated context for token-bounded ingestion.
+
+## Boundaries
+
+- **Always (read-only):** any wisecli command — they only call `GET` against api.wise.com.
+- **Never:** wisecli does not write. No transfer creation, no recipient management, no token rotation. For write operations, the user must use the Wise UI or app directly.
+
+## Auth
+
+API tokens come from env vars matching `WISE_<NAME>_TOKEN` (or `WISE_API_TOKEN` for a single-account fallback). Tokens are bearer-authenticated against `api.wise.com`. Use a read-only token from [wise.com/settings/api-tokens](https://wise.com/settings/api-tokens).
