@@ -1,4 +1,4 @@
-import { ApiError } from "./errors.ts";
+import { classifyHttpError, classifyNetworkError } from "@howells/cli";
 
 /** Base URL for the Wise (TransferWise) API. */
 export const BASE_URL = "https://api.wise.com";
@@ -12,23 +12,12 @@ export interface ApiOptions {
   query?: Record<string, string | number | undefined>;
 }
 
-function parseRetryAfter(value: string | null): number | undefined {
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds;
-  const date = Date.parse(value);
-  if (!Number.isNaN(date)) {
-    return Math.max(0, Math.round((date - Date.now()) / 1000));
-  }
-  return undefined;
-}
-
 /**
  * Make an authenticated GET request to the Wise API.
  *
- * @throws ApiError if the response status is not 2xx. The error carries
- * `status`, `is_retriable`, `retry_after_seconds`, and `trace_id` for
- * agent-friendly retry decisions.
+ * @throws CliError (from @howells/cli) with structured `code`, `status`,
+ *   `is_retriable`, and recovery hints. Network failures throw with
+ *   `code: "NETWORK_ERROR"` and `is_retriable: true`.
  */
 export async function api<T>({
   token,
@@ -48,28 +37,26 @@ export async function api<T>({
     if (qs) url += `?${qs}`;
   }
 
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+  } catch (err) {
+    throw classifyNetworkError(err, { vendor: "Wise" });
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    const traceId =
-      res.headers.get("x-request-id") ??
-      res.headers.get("x-trace-id") ??
-      undefined;
-    throw new ApiError(
-      res.status,
-      `Wise API ${res.status}: ${text || res.statusText}`,
-      {
-        retry_after_seconds: parseRetryAfter(res.headers.get("retry-after")),
-        trace_id: traceId ?? undefined,
-      },
-    );
+    throw classifyHttpError(res, text, {
+      vendor: "Wise",
+      authRecoveryHint:
+        "Token may be invalid or revoked. Regenerate at wise.com/settings/api-tokens and update your WISE_<NAME>_TOKEN env var.",
+    });
   }
 
   const contentType = res.headers.get("content-type") ?? "";

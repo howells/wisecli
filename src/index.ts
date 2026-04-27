@@ -153,7 +153,7 @@ switch (command) {
       if (!Number.isInteger(parsed) || parsed < 0) {
         fail(
           `Invalid offset: "${offsetRaw}". Must be a non-negative integer.`,
-          "ERR_VALIDATION",
+          "VALIDATION",
           "transfers",
         );
       }
@@ -367,7 +367,7 @@ switch (command) {
           error: {
             ok: false,
             error: "<message>",
-            code: "ERR_USAGE | ERR_VALIDATION | ERR_NOT_FOUND | ERR_NO_TOKEN | ERR_AUTH | ERR_RATE_LIMIT | ERR_UNAVAILABLE | ERR_NETWORK | ERR_UNKNOWN",
+            code: "USAGE | VALIDATION | NOT_FOUND | AUTH_MISSING | AUTH_REFUSED | RATE_LIMITED | API_ERROR | NETWORK_ERROR | INTERNAL",
             is_retriable: "boolean",
             retry_after_seconds: "number?",
             trace_id: "string?",
@@ -423,12 +423,12 @@ switch (command) {
     break;
 
   case undefined:
-    fail("No command provided. Run 'wisecli help' for usage.", "ERR_USAGE");
+    fail("No command provided. Run 'wisecli help' for usage.", "USAGE");
     break;
 
   default:
     fail(
       `Unknown command: "${command}". Run 'wisecli help' for usage.`,
-      "ERR_USAGE",
+      "USAGE",
     );
 }

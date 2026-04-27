@@ -105,7 +105,7 @@ describe("wisecli MCP server", () => {
       code: string;
       is_retriable: boolean;
     };
-    expect(data.code).toBe("ERR_NO_TOKEN");
+    expect(data.code).toBe("AUTH_MISSING");
     expect(data.is_retriable).toBe(false);
     await client.close();
   });
@@ -152,7 +152,7 @@ describe("wisecli MCP server", () => {
     await client.close();
   });
 
-  it("wise_list_transfers maps Wise 401 to ERR_AUTH with hint", async () => {
+  it("wise_list_transfers maps Wise 401 to AUTH_REFUSED with hint", async () => {
     process.env.WISE_API_TOKEN = "bad-token";
     globalThis.fetch = (async (url: string) => {
       if (url.endsWith("/v2/profiles")) {
@@ -173,19 +173,17 @@ describe("wisecli MCP server", () => {
     const data = parseText(res.content) as {
       code: string;
       is_retriable: boolean;
-      type: string;
-      title: string;
       status: number;
+      recovery_hint?: string;
     };
-    expect(data.code).toBe("ERR_AUTH");
+    expect(data.code).toBe("AUTH_REFUSED");
     expect(data.is_retriable).toBe(false);
-    expect(data.type).toBe("https://wisecli.dev/errors/auth");
-    expect(data.title).toBe("Wise authentication failed");
     expect(data.status).toBe(401);
+    expect(data.recovery_hint).toMatch(/wise\.com\/settings\/api-tokens/);
     await client.close();
   });
 
-  it("wise_list_transfers maps Wise 429 to ERR_RATE_LIMIT with retry_after", async () => {
+  it("wise_list_transfers maps Wise 429 to RATE_LIMITED with retry_after", async () => {
     process.env.WISE_API_TOKEN = "tok";
     globalThis.fetch = (async (url: string) => {
       if (url.endsWith("/v2/profiles")) {
@@ -211,7 +209,7 @@ describe("wisecli MCP server", () => {
       is_retriable: boolean;
       retry_after_seconds?: number;
     };
-    expect(data.code).toBe("ERR_RATE_LIMIT");
+    expect(data.code).toBe("RATE_LIMITED");
     expect(data.is_retriable).toBe(true);
     expect(data.retry_after_seconds).toBe(30);
     await client.close();

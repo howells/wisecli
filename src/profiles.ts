@@ -55,7 +55,7 @@ export function pickProfile(
 ): WiseProfile {
   if (profiles.length === 0) {
     throw new WiseCliError(
-      "ERR_NOT_FOUND",
+      "NOT_FOUND",
       "No Wise profiles found under this token. Check the token has API access.",
     );
   }
@@ -65,7 +65,7 @@ export function pickProfile(
     const match = profiles.find((p) => p.type === key);
     if (!match) {
       throw new WiseCliError(
-        "ERR_NOT_FOUND",
+        "NOT_FOUND",
         `No "${type}" profile under this token. Available: ${profiles
           .map((p) => p.type)
           .join(", ")}.`,
@@ -79,7 +79,7 @@ export function pickProfile(
   }
 
   throw new WiseCliError(
-    "ERR_VALIDATION",
+    "VALIDATION",
     `This token has multiple profiles (${profiles
       .map((p) => p.type)
       .join(", ")}). Pass --profile-type business|personal.`,

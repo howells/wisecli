@@ -62,7 +62,7 @@ describe.skipIf(!HAS_BUILD)("wisecli-mcp subprocess (built bin)", () => {
     await client.close();
   }, 10_000);
 
-  it("surfaces ERR_NO_TOKEN with type URI when no token is set", async () => {
+  it("surfaces AUTH_MISSING when no token is set", async () => {
     // Pass an explicit env without WISE_API_TOKEN — getDefaultEnvironment
     // would inherit the test process env, so we override here.
     const { client } = await spawnAndConnect();
@@ -73,10 +73,9 @@ describe.skipIf(!HAS_BUILD)("wisecli-mcp subprocess (built bin)", () => {
     expect(res.isError).toBe(true);
     const arr = res.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(arr[0]?.text ?? "{}");
-    expect(data.code).toBe("ERR_NO_TOKEN");
-    expect(data.type).toBe("https://wisecli.dev/errors/no-token");
-    expect(data.title).toBe("No Wise token configured");
+    expect(data.code).toBe("AUTH_MISSING");
     expect(data.is_retriable).toBe(false);
+    expect(data.error).toMatch(/No Wise tokens/i);
     await client.close();
   }, 10_000);
 });

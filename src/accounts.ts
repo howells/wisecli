@@ -50,7 +50,7 @@ export function resolveAccount(name: string | undefined): AccountConfig {
     const partial = accounts.find((a) => a.name.startsWith(key));
     if (partial) return partial;
     throw new WiseCliError(
-      "ERR_NOT_FOUND",
+      "NOT_FOUND",
       `No account "${name}" found. Available: ${
         accounts.map((a) => a.name).join(", ") || "none"
       }. Set WISE_<NAME>_TOKEN env vars.`,
@@ -59,7 +59,7 @@ export function resolveAccount(name: string | undefined): AccountConfig {
 
   if (accounts.length === 0) {
     throw new WiseCliError(
-      "ERR_NO_TOKEN",
+      "AUTH_MISSING",
       "No Wise tokens found. Set WISE_API_TOKEN or WISE_<NAME>_TOKEN env vars.",
     );
   }
@@ -71,7 +71,7 @@ export function allAccounts(): AccountConfig[] {
   const accounts = discoverAccounts();
   if (accounts.length === 0) {
     throw new WiseCliError(
-      "ERR_NO_TOKEN",
+      "AUTH_MISSING",
       "No Wise tokens found. Set WISE_API_TOKEN or WISE_<NAME>_TOKEN env vars.",
     );
   }

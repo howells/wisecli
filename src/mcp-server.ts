@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * MCP server for wisecli.
  *
@@ -18,6 +19,7 @@
  *   }
  */
 
+import { toMcpToolError } from "@howells/cli/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
@@ -32,7 +34,6 @@ import {
   type TransfersOptions,
   transfers,
 } from "./commands.ts";
-import { ApiError, titleFor, typeUriFor, WiseCliError } from "./errors.ts";
 import { listProfiles } from "./profiles.ts";
 
 const PROFILE_TYPE = z
@@ -103,46 +104,12 @@ function structured<T>(data: T) {
   };
 }
 
-function errorResult(err: unknown) {
-  if (err instanceof ApiError) {
-    const code = err.toCode();
-    return {
-      content: jsonContent({
-        type: typeUriFor(code),
-        title: titleFor(code),
-        error: err.message,
-        code,
-        status: err.status,
-        is_retriable: err.is_retriable,
-        retry_after_seconds: err.retry_after_seconds,
-        trace_id: err.trace_id,
-      }),
-      isError: true,
-    };
-  }
-  if (err instanceof WiseCliError) {
-    return {
-      content: jsonContent({
-        type: typeUriFor(err.code),
-        title: titleFor(err.code),
-        error: err.message,
-        code: err.code,
-        is_retriable: false,
-      }),
-      isError: true,
-    };
-  }
-  return {
-    content: jsonContent({
-      type: typeUriFor("ERR_UNKNOWN"),
-      title: titleFor("ERR_UNKNOWN"),
-      error: err instanceof Error ? err.message : String(err),
-      code: "ERR_UNKNOWN",
-      is_retriable: false,
-    }),
-    isError: true,
-  };
-}
+/**
+ * Translate any thrown value to an MCP tool error envelope. Delegates to
+ * `@howells/cli/mcp` so the shape stays in sync with the CLI's stdout
+ * error JSON (and revolutcli's MCP errors).
+ */
+const errorResult = toMcpToolError;
 
 /** Build an MCP server with all wisecli tools registered. Exported for tests. */
 export function buildServer(): McpServer {

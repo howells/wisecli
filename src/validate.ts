@@ -21,21 +21,21 @@ export function validateDate(
   if (hasControlChars(value)) {
     fail(
       `Invalid ${field}: contains control characters.`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
   if (value.includes("..") || value.includes("/")) {
     fail(
       `Invalid ${field}: contains path traversal characters.`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
   if (!ISO_DATE_PATTERN.test(value)) {
     fail(
       `Invalid ${field}: "${value}". Must be ISO 8601 (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ).`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
@@ -48,28 +48,28 @@ export function validateAccountName(value: string, command: string): void {
   if (hasControlChars(value)) {
     fail(
       `Invalid ${label}: contains control characters.`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
   if (value.includes("..") || value.includes("/") || value.includes("\\")) {
     fail(
       `Invalid ${label}: contains path traversal characters.`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
   if (value.includes("%") || value.includes("?") || value.includes("#")) {
     fail(
       `Invalid ${label}: contains encoded or query characters.`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
   if (value.length > maxLength) {
     fail(
       `Invalid ${label}: too long (max ${maxLength} characters).`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
@@ -81,7 +81,7 @@ export function validateProfileType(value: string, command: string): void {
   if (key !== "business" && key !== "personal") {
     fail(
       `Invalid profile-type: "${value}". Must be "business" or "personal".`,
-      "ERR_VALIDATION",
+      "VALIDATION",
       command,
     );
   }
