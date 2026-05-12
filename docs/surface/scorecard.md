@@ -143,7 +143,6 @@ A  src/errors.ts                   # ApiError, WiseCliError, fail, failFromUnkno
 A  src/mcp-server.ts                # 5 tools, Zod schemas, MCP annotations
 A  src/mcp-server.test.ts          # 9 InMemoryTransport tests
 A  .github/workflows/ci.yml        # typecheck + lint + test + build on push/PR
-A  docs/surface/audit-2026-04-27.md
 A  docs/surface/scorecard.md
 ```
 
